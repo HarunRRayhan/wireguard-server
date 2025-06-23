@@ -151,7 +151,8 @@ test_script_syntax() {
 test_permissions() {
     test_start "Script Permissions"
     
-    	local script_perms=$(stat -c "%a" installer.sh)
+    local script_perms
+    script_perms=$(stat -c "%a" installer.sh)
     if [[ "$script_perms" =~ ^[67][0-9][0-9]$ ]]; then
         log_info "Script has appropriate permissions: $script_perms"
         test_pass

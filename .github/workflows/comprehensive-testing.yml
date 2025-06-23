@@ -1,9 +1,9 @@
 name: WireGuard Script CI/CD
 
 on:
-  push:
-    branches: [ main, research ]
   pull_request:
+    branches: [ main, research ]
+  push:
     branches: [ main ]
   schedule:
     # Run weekly on Sundays at 2 AM UTC
