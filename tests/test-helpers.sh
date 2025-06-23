@@ -117,11 +117,13 @@ validate_test_environment() {
     fi
     
     # Detect OS
-    local os_info=$(detect_os)
+    local os_info
+    os_info=$(detect_os)
     log_info "Detected OS: $os_info"
     
     # Detect package manager
-    local pkg_mgr=$(get_package_manager)
+    local pkg_mgr
+    pkg_mgr=$(get_package_manager)
     log_info "Package manager: $pkg_mgr"
     
     test_pass
@@ -267,7 +269,8 @@ test_network_configuration() {
     
     # Check IP forwarding
     if [[ -f /proc/sys/net/ipv4/ip_forward ]]; then
-        local ip_forward=$(cat /proc/sys/net/ipv4/ip_forward)
+        local ip_forward
+        ip_forward=$(cat /proc/sys/net/ipv4/ip_forward)
         if [[ "$ip_forward" == "1" ]]; then
             log_info "IP forwarding is enabled"
         else
@@ -283,7 +286,8 @@ test_file_permissions() {
     
     # Check server config permissions
     if [[ -f /etc/wireguard/wg0.conf ]]; then
-        local perms=$(stat -c "%a" /etc/wireguard/wg0.conf)
+        local perms
+        perms=$(stat -c "%a" /etc/wireguard/wg0.conf)
         if [[ "$perms" == "600" ]]; then
             log_info "Server config has correct permissions (600)"
         else
@@ -294,7 +298,8 @@ test_file_permissions() {
     
     # Check client config permissions
     if [[ -f ~/testclient.conf ]]; then
-        local perms=$(stat -c "%a" ~/testclient.conf)
+        local perms
+        perms=$(stat -c "%a" ~/testclient.conf)
         if [[ "$perms" == "600" ]]; then
             log_info "Client config has correct permissions (600)"
         else
