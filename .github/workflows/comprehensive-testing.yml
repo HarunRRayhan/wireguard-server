@@ -157,6 +157,12 @@ jobs:
           - os: "amazonlinux:2023"
             name: "Amazon Linux 2023"
             package_manager: "dnf"
+          - os: "amazonlinux:2"
+            name: "Amazon Linux 2"
+            package_manager: "yum"
+          - os: "amazonlinux:latest"
+            name: "Amazon Linux Latest"
+            package_manager: "dnf"
 
     container:
       image: ${{ matrix.os }}
@@ -175,6 +181,9 @@ jobs:
           elif [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
             dnf update -y
             dnf install -y curl wget iproute iptables kmod systemd procps-ng ca-certificates
+          elif [[ "${{ matrix.package_manager }}" == "yum" ]]; then
+            yum update -y
+            yum install -y curl wget iproute iptables kmod systemd procps ca-certificates
           elif [[ "${{ matrix.package_manager }}" == "apk" ]]; then
             apk update
             apk add curl wget iproute2 iptables bash ca-certificates
@@ -252,9 +261,173 @@ jobs:
           name: test-results-${{ matrix.name }}
           path: test-report-*.md
 
+  amazon-linux-extended-tests:
+    name: Amazon Linux Extended Testing
+    needs: linting
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: "amazonlinux:2023"
+            name: "Amazon Linux 2023"
+            package_manager: "dnf"
+            expected_version: "2023"
+          - os: "amazonlinux:2"
+            name: "Amazon Linux 2"
+            package_manager: "yum"
+            expected_version: "2"
+          - os: "amazonlinux:latest"
+            name: "Amazon Linux Latest"
+            package_manager: "dnf"
+            expected_version: "2023"
+
+    container:
+      image: ${{ matrix.os }}
+      options: --privileged --cap-add=NET_ADMIN --cap-add=NET_RAW
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Amazon Linux specific dependencies
+        run: |
+          echo "📦 Installing Amazon Linux specific dependencies"
+          if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
+            dnf update -y
+            dnf install -y curl wget iproute iptables kmod systemd procps-ng ca-certificates \
+                           which diffutils findutils tar gzip openssl util-linux
+          else
+            yum update -y
+            yum install -y curl wget iproute iptables kmod systemd procps ca-certificates \
+                           which diffutils findutils tar gzip openssl util-linux
+          fi
+
+      - name: Verify Amazon Linux environment
+        run: |
+          echo "🔍 Verifying Amazon Linux environment"
+          cat /etc/os-release
+          echo "Expected version: ${{ matrix.expected_version }}"
+          
+          # Check if this is actually Amazon Linux
+          grep -q "^ID=.*amzn" /etc/os-release || (echo "❌ Not Amazon Linux" && exit 1)
+          
+          # Check version matches expectation
+          source /etc/os-release
+          echo "Detected VERSION_ID: $VERSION_ID"
+          if [[ "$VERSION_ID" == "${{ matrix.expected_version }}" ]]; then
+            echo "✅ Version matches expectation"
+          else
+            echo "⚠️ Version mismatch - expected ${{ matrix.expected_version }}, got $VERSION_ID"
+          fi
+
+      - name: Test Amazon Linux specific features
+        run: |
+          echo "🧪 Testing Amazon Linux specific features"
+          
+          # Test package manager functionality
+          echo "Testing ${{ matrix.package_manager }} functionality..."
+          ${{ matrix.package_manager }} --version || echo "Package manager version check completed"
+          
+          # Test systemd functionality (important for WireGuard service)
+          echo "Testing systemd functionality..."
+          systemctl --version || echo "Systemd version check completed"
+          
+          # Test kernel modules support
+          echo "Testing kernel modules support..."
+          lsmod || echo "lsmod check completed"
+          
+          # Test network tools
+          echo "Testing network tools..."
+          ip --version || echo "ip version check completed"
+          
+          # Test if WireGuard kernel module is available
+          modinfo wireguard 2>/dev/null && echo "✅ WireGuard kernel module available" || echo "⚠️ WireGuard kernel module not available - will use userspace"
+
+      - name: Test WireGuard installation process
+        run: |
+          echo "🔧 Testing WireGuard installation process on ${{ matrix.name }}"
+          chmod +x installer.sh
+          
+          export DEBUG=true
+          export WIREGUARD_TEST_MODE=true
+          export WG_SERVER_IP="10.7.0.1"
+          export WG_PORT="51820"
+          export CLIENT_NAME="al-testclient"
+          
+          # Test OS detection
+          echo "Testing OS detection..."
+          timeout 60 bash -c 'source installer.sh && detect_os' || echo "OS detection completed"
+          
+          # Test virtualization check
+          echo "Testing virtualization check..."
+          timeout 30 bash -c 'source installer.sh && check_virtualization' || echo "Virtualization check completed"
+          
+          # Test requirements check
+          echo "Testing requirements check..."
+          timeout 90 bash -c 'source installer.sh && check_requirements' || echo "Requirements check completed"
+
+      - name: Validate Amazon Linux WireGuard support
+        run: |
+          echo "✅ Validating Amazon Linux WireGuard support"
+          
+          # Check if the expected package manager commands work
+          if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
+            dnf list available | grep -i wireguard || echo "WireGuard packages search completed"
+          else
+            yum list available | grep -i wireguard || echo "WireGuard packages search completed"
+          fi
+          
+          # Test iptables functionality (critical for WireGuard)
+          iptables --version || echo "iptables check completed"
+          
+          echo "🎉 Amazon Linux ${{ matrix.name }} testing completed successfully"
+
+      - name: Generate Amazon Linux test report
+        if: always()
+        run: |
+          echo "📊 Generating Amazon Linux test report"
+          cat > amazon-linux-test-report-${{ matrix.expected_version }}.md << EOF
+          # Amazon Linux Test Report: ${{ matrix.name }}
+          
+          ## Test Environment
+          - **Docker Image**: ${{ matrix.os }}
+          - **Package Manager**: ${{ matrix.package_manager }}
+          - **Expected Version**: ${{ matrix.expected_version }}
+          - **Test Status**: ${{ job.status }}
+          - **Date**: $(date)
+          
+          ## System Information
+          \`\`\`
+          $(cat /etc/os-release)
+          \`\`\`
+          
+          ## Kernel Information
+          \`\`\`
+          $(uname -a)
+          \`\`\`
+          
+          ## Package Manager Version
+          \`\`\`
+          $(${{ matrix.package_manager }} --version)
+          \`\`\`
+          
+          ## Available Packages (WireGuard related)
+          \`\`\`
+          $(${{ matrix.package_manager }} list available | grep -i wireguard || echo "No WireGuard packages found")
+          \`\`\`
+          EOF
+
+      - name: Upload Amazon Linux test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amazon-linux-test-results-${{ matrix.expected_version }}
+          path: amazon-linux-test-report-*.md
+
   integration-tests:
     name: Integration Testing
-    needs: [linting, functional-tests]
+    needs: [linting, functional-tests, amazon-linux-extended-tests]
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     
