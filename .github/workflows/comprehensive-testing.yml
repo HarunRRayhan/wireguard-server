@@ -153,16 +153,7 @@ jobs:
             name: "Alpine 3.19"
             package_manager: "apk"
           
-          # Amazon Linux (2022-2025)
-          - os: "amazonlinux:2023"
-            name: "Amazon Linux 2023"
-            package_manager: "dnf"
-          - os: "amazonlinux:2"
-            name: "Amazon Linux 2"
-            package_manager: "yum"
-          - os: "amazonlinux:latest"
-            name: "Amazon Linux Latest"
-            package_manager: "dnf"
+          # Amazon Linux testing is handled in dedicated amazon-linux-extended-tests job
 
     container:
       image: ${{ matrix.os }}
