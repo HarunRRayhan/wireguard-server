@@ -139,7 +139,7 @@ test_validation_only() {
 test_script_syntax() {
     test_start "Script Syntax Check"
     
-    if bash -n wireguard-install.sh; then
+    	if bash -n installer.sh; then
         log_info "Script syntax is valid"
         test_pass
     else
@@ -151,7 +151,7 @@ test_script_syntax() {
 test_permissions() {
     test_start "Script Permissions"
     
-    local script_perms=$(stat -c "%a" wireguard-install.sh)
+    	local script_perms=$(stat -c "%a" installer.sh)
     if [[ "$script_perms" =~ ^[67][0-9][0-9]$ ]]; then
         log_info "Script has appropriate permissions: $script_perms"
         test_pass
@@ -219,8 +219,8 @@ test_config_validation() {
 debug_environment() {
     echo "=== Debug Information ==="
     echo "Working directory: $(pwd)"
-    echo "Script exists: $(test -f wireguard-install.sh && echo "yes" || echo "no")"
-    echo "Script executable: $(test -x wireguard-install.sh && echo "yes" || echo "no")"
+    echo "Script exists: $(test -f installer.sh && echo "yes" || echo "no")"
+    echo "Script executable: $(test -x installer.sh && echo "yes" || echo "no")"
     echo "Running as: $(whoami) (UID: $EUID)"
     echo "OS Release:"
     cat /etc/os-release 2>/dev/null || echo "No /etc/os-release"

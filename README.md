@@ -38,9 +38,9 @@ A modernized, robust WireGuard VPN installation script with comprehensive suppor
 
 ```bash
 # Download and run the script
-curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/wireguard-install.sh
-chmod +x wireguard-install.sh
-sudo ./wireguard-install.sh
+curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/installer.sh
+chmod +x installer.sh
+sudo ./installer.sh
 ```
 
 ### Requirements
@@ -59,7 +59,7 @@ The script will automatically:
 ### Interactive Mode
 
 ```bash
-sudo ./wireguard-install.sh
+sudo ./installer.sh
 ```
 
 The script will prompt you for:
@@ -76,7 +76,7 @@ export WG_PORT="51820"
 export CLIENT_NAME="laptop"
 export WIREGUARD_TEST_MODE="true"
 
-sudo ./wireguard-install.sh
+sudo ./installer.sh
 ```
 
 ## Development
@@ -98,8 +98,8 @@ sudo TEST_MODE=installation ./tests/run-tests.sh
 
 ```bash
 # Check script syntax and style
-shellcheck wireguard-install.sh
-shfmt -d wireguard-install.sh
+shellcheck installer.sh
+shfmt -d installer.sh
 ```
 
 ### Docker Testing
@@ -108,9 +108,9 @@ shfmt -d wireguard-install.sh
 # Test on Ubuntu 24.04
 docker run --rm -it --privileged ubuntu:24.04 bash
 # Inside container:
-curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/wireguard-install.sh
-chmod +x wireguard-install.sh
-WIREGUARD_TEST_MODE=true ./wireguard-install.sh
+curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/installer.sh
+chmod +x installer.sh
+WIREGUARD_TEST_MODE=true ./installer.sh
 ```
 
 ## Supported Operating Systems
@@ -185,7 +185,7 @@ $HOME/
 ### Debug Mode
 
 ```bash
-DEBUG=true sudo ./wireguard-install.sh
+DEBUG=true sudo ./installer.sh
 ```
 
 ### Container Testing
@@ -193,7 +193,7 @@ DEBUG=true sudo ./wireguard-install.sh
 For testing in containers without full privileges:
 
 ```bash
-WIREGUARD_TEST_MODE=true sudo ./wireguard-install.sh
+WIREGUARD_TEST_MODE=true sudo ./installer.sh
 ```
 
 ## Contributing

@@ -105,14 +105,14 @@ validate_test_environment() {
     fi
     
     # Check if script exists
-    if [[ ! -f "wireguard-install.sh" ]]; then
-        test_fail "wireguard-install.sh not found"
+    if [[ ! -f "installer.sh" ]]; then
+        test_fail "installer.sh not found"
         return 1
     fi
     
     # Check if script is executable
-    if [[ ! -x "wireguard-install.sh" ]]; then
-        chmod +x wireguard-install.sh
+    if [[ ! -x "installer.sh" ]]; then
+        chmod +x installer.sh
         log_info "Made script executable"
     fi
     
@@ -143,7 +143,7 @@ test_wireguard_installation() {
     
     # Run installation with timeout
     log_info "Starting WireGuard installation..."
-    if timeout 300 ./wireguard-install.sh; then
+    if timeout 300 ./installer.sh; then
         test_pass
     else
         test_fail "Installation script failed or timed out"

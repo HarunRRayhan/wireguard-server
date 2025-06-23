@@ -57,7 +57,7 @@ wireguard-install/
 │   ├── README.md                   # Testing documentation
 │   ├── run-tests.sh               # Main test runner
 │   └── test-helpers.sh            # Helper functions
-├── wireguard-install.sh           # Main script (18KB)
+├── installer.sh                   # Main script (18KB)
 ├── README.md                      # User documentation
 ├── LICENSE                        # MIT license
 ├── DEVELOPMENT.md                 # This file
