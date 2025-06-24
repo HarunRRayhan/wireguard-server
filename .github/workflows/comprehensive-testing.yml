@@ -230,10 +230,8 @@ jobs:
         if: always()
         run: |
           echo "📊 Generating test report for ${{ matrix.name }}"
-          # Create a safe filename by replacing spaces and special characters
-          SAFE_NAME="${{ matrix.name }}"
-          SAFE_NAME="${SAFE_NAME// /-}"
-          SAFE_NAME="${SAFE_NAME//\//-}"
+          # Create a safe filename by replacing spaces and special characters with POSIX tools
+          SAFE_NAME=$(echo "${{ matrix.name }}" | tr ' /' '-')
           REPORT_FILE="test-report-${SAFE_NAME}.md"
           
           cat > "${REPORT_FILE}" << EOF
