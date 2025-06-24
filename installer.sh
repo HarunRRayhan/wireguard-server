@@ -218,7 +218,7 @@ detect_rhel_version() {
 # Alpine version detection and validation
 detect_alpine_version() {
   local version="$1"
-  local major_minor_version="${version%.*}"  # Extract major.minor (e.g., "3.19.7" -> "3.19")
+  local major_minor_version="${version%.*}" # Extract major.minor (e.g., "3.19.7" -> "3.19")
 
   case "$major_minor_version" in
     3.18 | 3.19 | 3.20)
