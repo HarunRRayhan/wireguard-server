@@ -218,19 +218,20 @@ detect_rhel_version() {
 # Alpine version detection and validation
 detect_alpine_version() {
   local version="$1"
+  local major_minor_version="${version%.*}"  # Extract major.minor (e.g., "3.19.7" -> "3.19")
 
-  case "$version" in
+  case "$major_minor_version" in
     3.18 | 3.19 | 3.20)
       OS="alpine"
-      OS_VERSION="$version"
+      OS_VERSION="$major_minor_version"
       PACKAGE_MANAGER="apk"
-      log_info "Alpine Linux $version detected - Supported ✓"
+      log_info "Alpine Linux $major_minor_version detected - Supported ✓"
       ;;
     3.17)
       OS="alpine"
-      OS_VERSION="$version"
+      OS_VERSION="$major_minor_version"
       PACKAGE_MANAGER="apk"
-      log_warn "Alpine Linux $version detected - End of life, consider upgrading"
+      log_warn "Alpine Linux $major_minor_version detected - End of life, consider upgrading"
       ;;
     *)
       log_error "Alpine Linux $version is not supported"
