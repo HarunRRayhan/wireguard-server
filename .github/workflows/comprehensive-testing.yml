@@ -230,7 +230,13 @@ jobs:
         if: always()
         run: |
           echo "📊 Generating test report for ${{ matrix.name }}"
-          cat > test-report-${{ matrix.name }}.md << EOF
+          # Create a safe filename by replacing spaces and special characters
+          SAFE_NAME="${{ matrix.name }}"
+          SAFE_NAME="${SAFE_NAME// /-}"
+          SAFE_NAME="${SAFE_NAME//\//-}"
+          REPORT_FILE="test-report-${SAFE_NAME}.md"
+          
+          cat > "${REPORT_FILE}" << EOF
           # Test Report: ${{ matrix.name }}
           
           - **OS**: ${{ matrix.os }}
@@ -244,6 +250,8 @@ jobs:
           $(cat /etc/os-release)
           \`\`\`
           EOF
+          
+          echo "Generated report: ${REPORT_FILE}"
 
       - name: Upload test results
         if: always()
@@ -378,7 +386,8 @@ jobs:
         if: always()
         run: |
           echo "📊 Generating Amazon Linux test report"
-          cat > amazon-linux-test-report-${{ matrix.expected_version }}.md << EOF
+          REPORT_FILE="amazon-linux-test-report-${{ matrix.expected_version }}.md"
+          cat > "${REPORT_FILE}" << EOF
           # Amazon Linux Test Report: ${{ matrix.name }}
           
           ## Test Environment
@@ -408,6 +417,8 @@ jobs:
           $(${{ matrix.package_manager }} list available | grep -i wireguard || echo "No WireGuard packages found")
           \`\`\`
           EOF
+          
+          echo "Generated Amazon Linux report: ${REPORT_FILE}"
 
       - name: Upload Amazon Linux test results
         if: always()
