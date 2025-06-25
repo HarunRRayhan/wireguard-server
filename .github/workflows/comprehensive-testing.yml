@@ -305,8 +305,13 @@ jobs:
             yum install -y tar gzip
           fi
 
-      - name: Checkout code
+      - name: Checkout code (Amazon Linux 2)
+        uses: actions/checkout@v3
+        if: matrix.expected_version == '2'
+      
+      - name: Checkout code (Modern Amazon Linux)
         uses: actions/checkout@v4
+        if: matrix.expected_version != '2'
 
       - name: Install Amazon Linux specific dependencies
         run: |
