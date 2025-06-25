@@ -446,9 +446,16 @@ jobs:
 
       - name: Upload Amazon Linux test results
         if: always()
+        run: |
+          # Create a safe artifact name by replacing colons with dashes
+          SAFE_OS_NAME=$(echo "${{ matrix.os }}" | tr ':' '-')
+          echo "SAFE_OS_NAME=${SAFE_OS_NAME}" >> $GITHUB_ENV
+      
+      - name: Upload Amazon Linux test results (actual upload)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: amazon-linux-test-results-${{ matrix.expected_version }}
+          name: amazon-linux-test-results-${{ env.SAFE_OS_NAME }}
           path: amazon-linux-test-report-*.md
 
   integration-tests:
