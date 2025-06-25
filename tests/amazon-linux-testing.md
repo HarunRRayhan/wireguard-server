@@ -88,6 +88,9 @@ docker run --rm -it --privileged --cap-add=NET_ADMIN --cap-add=NET_RAW \
 - **AL2023**: Uses dnf and has WireGuard packages in the main repository
 - **AL2**: Uses yum and may require EPEL for WireGuard packages
 
+#### Package Manager Conflicts
+Both Amazon Linux versions may have `curl-minimal` installed by default, which conflicts with the full `curl` package. The installation script automatically handles this by using `--allowerasing` to replace `curl-minimal` with `curl`.
+
 #### Kernel Module Support
 - **AL2023**: Full kernel module support for WireGuard
 - **AL2**: May require userspace implementation (BoringTun) in some configurations
@@ -137,7 +140,12 @@ Our Amazon Linux tests verify:
    - Ensure proper repository configuration
    - Check network connectivity within container
 
-4. **GLIBC Compatibility Issues in CI/CD**
+4. **curl-minimal Package Conflicts**
+   - Amazon Linux comes with `curl-minimal` which conflicts with full `curl`
+   - Symptoms: "problem with installed package curl-minimal"
+   - Solution: Use `--allowerasing` flag when installing curl: `dnf install -y --allowerasing curl`
+
+5. **GLIBC Compatibility Issues in CI/CD**
    - Amazon Linux 2 has GLIBC < 2.27, incompatible with modern Node.js
    - Symptoms: `GLIBC_2.27' not found`, `GLIBC_2.28' not found`
    - Solution: Run tests in Docker containers, not as container jobs

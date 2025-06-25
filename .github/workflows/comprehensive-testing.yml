@@ -307,12 +307,26 @@ jobs:
           echo "📦 Installing basic dependencies"
           if [[ "$1" == "dnf" ]]; then
             dnf update -y
-            dnf install -y curl wget iproute iptables kmod systemd procps-ng ca-certificates \
-                           which diffutils findutils tar gzip openssl util-linux
+            # Handle curl-minimal conflict in RHEL-based systems
+            if rpm -q curl-minimal >/dev/null 2>&1; then
+              echo "curl-minimal detected, replacing with full curl package"
+              dnf install -y --allowerasing curl wget iproute iptables kmod systemd procps-ng ca-certificates \
+                             which diffutils findutils tar gzip openssl util-linux
+            else
+              dnf install -y curl wget iproute iptables kmod systemd procps-ng ca-certificates \
+                             which diffutils findutils tar gzip openssl util-linux
+            fi
           else
             yum update -y
-            yum install -y curl wget iproute iptables kmod systemd procps ca-certificates \
-                           which diffutils findutils tar gzip openssl util-linux
+            # Handle curl-minimal conflict in RHEL-based systems
+            if rpm -q curl-minimal >/dev/null 2>&1; then
+              echo "curl-minimal detected, replacing with full curl package"
+              yum install -y --allowerasing curl wget iproute iptables kmod systemd procps ca-certificates \
+                             which diffutils findutils tar gzip openssl util-linux
+            else
+              yum install -y curl wget iproute iptables kmod systemd procps ca-certificates \
+                             which diffutils findutils tar gzip openssl util-linux
+            fi
           fi
           
           echo "🔍 Verifying Amazon Linux environment"
