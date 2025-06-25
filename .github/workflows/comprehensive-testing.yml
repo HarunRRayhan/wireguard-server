@@ -291,109 +291,44 @@ jobs:
             package_manager: "dnf"
             expected_version: "2023"
 
-    container:
-      image: ${{ matrix.os }}
-      options: --privileged --cap-add=NET_ADMIN --cap-add=NET_RAW
-
     steps:
-      - name: Install basic dependencies for checkout
-        run: |
-          echo "📦 Installing basic dependencies required for checkout"
-          if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
-            dnf install -y tar gzip git
-          else
-            yum install -y tar gzip git
-          fi
-
-      - name: Manual checkout (Amazon Linux 2 - GLIBC compatibility)
-        if: matrix.expected_version == '2'
-        run: |
-          echo "🔄 Manually cloning repository for Amazon Linux 2 (GLIBC compatibility)"
-          # Configure git to trust the workspace directory
-          git config --global --add safe.directory /__w/wireguard-server/wireguard-server
-          git config --global --add safe.directory $(pwd)
-          # Initialize git repository and fetch specific commit
-          git init
-          git remote add origin https://github.com/${{ github.repository }}.git
-          git fetch origin ${{ github.sha }}
-          git checkout ${{ github.sha }}
-          echo "✅ Repository cloned successfully"
-      
-      - name: Checkout code (Modern Amazon Linux)
+      - name: Checkout code
         uses: actions/checkout@v4
-        if: matrix.expected_version != '2'
 
-      - name: Install Amazon Linux specific dependencies
+      - name: Test Amazon Linux in Docker container
         run: |
-          echo "📦 Installing Amazon Linux specific dependencies"
-          if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
+          echo "🐳 Running Amazon Linux tests in Docker container"
+          
+          # Create test script
+          cat > test-amazon-linux.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "📦 Installing basic dependencies"
+          if [[ "$1" == "dnf" ]]; then
             dnf update -y
-            # Handle curl-minimal conflict in RHEL-based systems
-            if rpm -q curl-minimal >/dev/null 2>&1; then
-              echo "curl-minimal detected, replacing with full curl package"
-              dnf install -y --allowerasing curl wget iproute iptables kmod systemd procps-ng ca-certificates \
-                             which diffutils findutils tar gzip openssl util-linux
-            else
-              dnf install -y curl wget iproute iptables kmod systemd procps-ng ca-certificates \
-                             which diffutils findutils tar gzip openssl util-linux
-            fi
+            dnf install -y curl wget iproute iptables kmod systemd procps-ng ca-certificates \
+                           which diffutils findutils tar gzip openssl util-linux
           else
             yum update -y
-            # Handle curl-minimal conflict in RHEL-based systems
-            if rpm -q curl-minimal >/dev/null 2>&1; then
-              echo "curl-minimal detected, replacing with full curl package"
-              yum install -y --allowerasing curl wget iproute iptables kmod systemd procps ca-certificates \
-                             which diffutils findutils tar gzip openssl util-linux
-            else
-              yum install -y curl wget iproute iptables kmod systemd procps ca-certificates \
-                             which diffutils findutils tar gzip openssl util-linux
-            fi
+            yum install -y curl wget iproute iptables kmod systemd procps ca-certificates \
+                           which diffutils findutils tar gzip openssl util-linux
           fi
-
-      - name: Verify Amazon Linux environment
-        run: |
+          
           echo "🔍 Verifying Amazon Linux environment"
           cat /etc/os-release
-          echo "Expected version: ${{ matrix.expected_version }}"
           
           # Check if this is actually Amazon Linux
           grep -q "^ID=.*amzn" /etc/os-release || (echo "❌ Not Amazon Linux" && exit 1)
           
-          # Check version matches expectation
-          source /etc/os-release
-          echo "Detected VERSION_ID: $VERSION_ID"
-          if [[ "$VERSION_ID" == "${{ matrix.expected_version }}" ]]; then
-            echo "✅ Version matches expectation"
-          else
-            echo "⚠️ Version mismatch - expected ${{ matrix.expected_version }}, got $VERSION_ID"
-          fi
-
-      - name: Test Amazon Linux specific features
-        run: |
           echo "🧪 Testing Amazon Linux specific features"
-          
-          # Test package manager functionality
-          echo "Testing ${{ matrix.package_manager }} functionality..."
-          ${{ matrix.package_manager }} --version || echo "Package manager version check completed"
-          
-          # Test systemd functionality (important for WireGuard service)
-          echo "Testing systemd functionality..."
+          $1 --version || echo "Package manager version check completed"
           systemctl --version || echo "Systemd version check completed"
-          
-          # Test kernel modules support
-          echo "Testing kernel modules support..."
           lsmod || echo "lsmod check completed"
-          
-          # Test network tools
-          echo "Testing network tools..."
           ip --version || echo "ip version check completed"
-          
-          # Test if WireGuard kernel module is available
           modinfo wireguard 2>/dev/null && echo "✅ WireGuard kernel module available" || echo "⚠️ WireGuard kernel module not available - will use userspace"
-
-      - name: Test WireGuard installation process
-        run: |
-          echo "🔧 Testing WireGuard installation process on ${{ matrix.name }}"
+          
+          echo "🔧 Testing WireGuard installation process"
           chmod +x installer.sh
           
           export DEBUG=true
@@ -402,47 +337,28 @@ jobs:
           export WG_PORT="51820"
           export CLIENT_NAME="al-testclient"
           
-          # Test OS detection
-          echo "Testing OS detection..."
           timeout 60 bash -c 'source installer.sh && detect_os' || echo "OS detection completed"
-          
-          # Test virtualization check
-          echo "Testing virtualization check..."
           timeout 30 bash -c 'source installer.sh && check_virtualization' || echo "Virtualization check completed"
-          
-          # Test requirements check
-          echo "Testing requirements check..."
           timeout 90 bash -c 'source installer.sh && check_requirements' || echo "Requirements check completed"
-
-      - name: Validate Amazon Linux WireGuard support
-        run: |
-          echo "✅ Validating Amazon Linux WireGuard support"
           
-          # Check if the expected package manager commands work
-          if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
+          echo "✅ Validating Amazon Linux WireGuard support"
+          if [[ "$1" == "dnf" ]]; then
             dnf list available | grep -i wireguard || echo "WireGuard packages search completed"
           else
             yum list available | grep -i wireguard || echo "WireGuard packages search completed"
           fi
           
-          # Test iptables functionality (critical for WireGuard)
           iptables --version || echo "iptables check completed"
+          echo "🎉 Amazon Linux testing completed successfully"
           
-          echo "🎉 Amazon Linux ${{ matrix.name }} testing completed successfully"
-
-      - name: Generate Amazon Linux test report
-        if: always()
-        run: |
-          echo "📊 Generating Amazon Linux test report"
-          REPORT_FILE="amazon-linux-test-report-${{ matrix.expected_version }}.md"
-          cat > "${REPORT_FILE}" << EOF
-          # Amazon Linux Test Report: ${{ matrix.name }}
+          # Generate test report
+          cat > "amazon-linux-test-report-$2.md" << REPORT_EOF
+          # Amazon Linux Test Report: $3
           
           ## Test Environment
-          - **Docker Image**: ${{ matrix.os }}
-          - **Package Manager**: ${{ matrix.package_manager }}
-          - **Expected Version**: ${{ matrix.expected_version }}
-          - **Test Status**: ${{ job.status }}
+          - **Docker Image**: $4
+          - **Package Manager**: $1
+          - **Expected Version**: $2
           - **Date**: $(date)
           
           ## System Information
@@ -457,30 +373,36 @@ jobs:
           
           ## Package Manager Version
           \`\`\`
-          $(${{ matrix.package_manager }} --version)
+          $($1 --version)
           \`\`\`
           
           ## Available Packages (WireGuard related)
           \`\`\`
-          $(${{ matrix.package_manager }} list available | grep -i wireguard || echo "No WireGuard packages found")
+          $($1 list available | grep -i wireguard || echo "No WireGuard packages found")
           \`\`\`
+          REPORT_EOF
+          
+          echo "Generated Amazon Linux report: amazon-linux-test-report-$2.md"
           EOF
           
-          echo "Generated Amazon Linux report: ${REPORT_FILE}"
+          chmod +x test-amazon-linux.sh
+          
+          # Run the test in Docker container and copy results out
+          docker run --rm --privileged --cap-add=NET_ADMIN --cap-add=NET_RAW \
+            -v $(pwd):/workspace -w /workspace \
+            ${{ matrix.os }} \
+            ./test-amazon-linux.sh "${{ matrix.package_manager }}" "${{ matrix.expected_version }}" "${{ matrix.name }}" "${{ matrix.os }}"
+          
+          # Clean up the test script
+          rm -f test-amazon-linux.sh
 
       - name: Upload Amazon Linux test results
         if: always()
-        run: |
-          # Create a safe artifact name by replacing colons with dashes
-          SAFE_OS_NAME=$(echo "${{ matrix.os }}" | tr ':' '-')
-          echo "SAFE_OS_NAME=${SAFE_OS_NAME}" >> $GITHUB_ENV
-      
-      - name: Upload Amazon Linux test results (actual upload)
-        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: amazon-linux-test-results-${{ env.SAFE_OS_NAME }}
+          name: amazon-linux-test-results-${{ matrix.expected_version }}
           path: amazon-linux-test-report-*.md
+          if-no-files-found: warn
 
   integration-tests:
     name: Integration Testing

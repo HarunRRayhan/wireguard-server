@@ -30,7 +30,7 @@ Based on the [Amazon Linux Docker Hub repository](https://hub.docker.com/_/amazo
 
 ### 1. Automated GitHub Actions Testing
 
-Our CI/CD pipeline tests all Amazon Linux versions with:
+Our CI/CD pipeline tests all Amazon Linux versions using Docker containers to avoid GLIBC compatibility issues:
 
 ```yaml
 strategy:
@@ -39,13 +39,18 @@ strategy:
       - os: "amazonlinux:2023"
         name: "Amazon Linux 2023"
         package_manager: "dnf"
+        expected_version: "2023"
       - os: "amazonlinux:2"
         name: "Amazon Linux 2"
         package_manager: "yum"
+        expected_version: "2"
       - os: "amazonlinux:latest"
         name: "Amazon Linux Latest"
         package_manager: "dnf"
+        expected_version: "2023"
 ```
+
+**Note**: Amazon Linux 2 has older GLIBC versions (< 2.27) that are incompatible with modern GitHub Actions runners. We now run tests in Docker containers and upload artifacts from the runner to avoid this issue.
 
 ### 2. Local Testing Commands
 
@@ -131,6 +136,12 @@ Our Amazon Linux tests verify:
 3. **Package Installation Failures**
    - Ensure proper repository configuration
    - Check network connectivity within container
+
+4. **GLIBC Compatibility Issues in CI/CD**
+   - Amazon Linux 2 has GLIBC < 2.27, incompatible with modern Node.js
+   - Symptoms: `GLIBC_2.27' not found`, `GLIBC_2.28' not found`
+   - Solution: Run tests in Docker containers, not as container jobs
+   - Upload artifacts from the runner, not from within the container
 
 #### Debug Commands
 
