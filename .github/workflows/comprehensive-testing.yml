@@ -309,6 +309,10 @@ jobs:
         if: matrix.expected_version == '2'
         run: |
           echo "🔄 Manually cloning repository for Amazon Linux 2 (GLIBC compatibility)"
+          # Configure git to trust the workspace directory
+          git config --global --add safe.directory /__w/wireguard-server/wireguard-server
+          git config --global --add safe.directory $(pwd)
+          # Clone the repository
           git clone https://github.com/${{ github.repository }}.git .
           git checkout ${{ github.sha }}
           echo "✅ Repository cloned successfully"
