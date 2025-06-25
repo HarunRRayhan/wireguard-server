@@ -312,8 +312,10 @@ jobs:
           # Configure git to trust the workspace directory
           git config --global --add safe.directory /__w/wireguard-server/wireguard-server
           git config --global --add safe.directory $(pwd)
-          # Clone the repository
-          git clone https://github.com/${{ github.repository }}.git .
+          # Initialize git repository and fetch specific commit
+          git init
+          git remote add origin https://github.com/${{ github.repository }}.git
+          git fetch origin ${{ github.sha }}
           git checkout ${{ github.sha }}
           echo "✅ Repository cloned successfully"
       
