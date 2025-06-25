@@ -296,6 +296,15 @@ jobs:
       options: --privileged --cap-add=NET_ADMIN --cap-add=NET_RAW
 
     steps:
+      - name: Install basic dependencies for checkout
+        run: |
+          echo "📦 Installing basic dependencies required for checkout"
+          if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
+            dnf install -y tar gzip
+          else
+            yum install -y tar gzip
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 
