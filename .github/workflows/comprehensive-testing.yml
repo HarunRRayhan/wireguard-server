@@ -300,14 +300,18 @@ jobs:
         run: |
           echo "📦 Installing basic dependencies required for checkout"
           if [[ "${{ matrix.package_manager }}" == "dnf" ]]; then
-            dnf install -y tar gzip
+            dnf install -y tar gzip git
           else
-            yum install -y tar gzip
+            yum install -y tar gzip git
           fi
 
-      - name: Checkout code (Amazon Linux 2)
-        uses: actions/checkout@v3
+      - name: Manual checkout (Amazon Linux 2 - GLIBC compatibility)
         if: matrix.expected_version == '2'
+        run: |
+          echo "🔄 Manually cloning repository for Amazon Linux 2 (GLIBC compatibility)"
+          git clone https://github.com/${{ github.repository }}.git .
+          git checkout ${{ github.sha }}
+          echo "✅ Repository cloned successfully"
       
       - name: Checkout code (Modern Amazon Linux)
         uses: actions/checkout@v4
