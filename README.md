@@ -1,6 +1,6 @@
 # WireGuard VPN Server Installer
 
-A modernized, robust WireGuard VPN installation script with comprehensive support for modern Linux distributions and automated testing infrastructure.
+A modernized, user-friendly WireGuard VPN installation script with comprehensive support for modern Linux distributions, client management, and NO initial sudo requirement.
 
 ## Features
 
@@ -20,11 +20,22 @@ A modernized, robust WireGuard VPN installation script with comprehensive suppor
 - Automatic detection and adaptation
 
 ✅ **Advanced Features**
+- **No initial sudo requirement** - Only requests privileges when needed
+- **Post-installation client management** - Add/remove/list clients easily
+- **Multiple DNS providers** - Cloudflare, Quad9, Google, OpenDNS, or custom
+- **Configuration backup/restore** - Secure backup and restore functionality
+- **IP address tracking** - Prevents client IP conflicts
+- **QR code generation** - Easy mobile client setup
+- **IPv6 ready** - Dual-stack support detection
 - Userspace WireGuard implementation (boringtun) for containers
-- Automatic OS detection and validation
 - Comprehensive error handling and logging
-- QR code generation for easy client setup
 - Interactive and non-interactive modes
+
+✅ **Security Features**
+- Delayed privilege escalation - runs without root until needed
+- Automatic client IP allocation tracking
+- Secure file permissions and key storage
+- DNS-over-TLS ready configuration
 
 ✅ **Testing Infrastructure**
 - GitHub Actions CI/CD
@@ -37,34 +48,60 @@ A modernized, robust WireGuard VPN installation script with comprehensive suppor
 ### Installation
 
 ```bash
-# Download and run the script
-curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/installer.sh
+# Download and run the script (NO sudo required initially!)
+curl -O https://raw.githubusercontent.com/HarunRRayhan/wireguard-server/main/installer.sh
 chmod +x installer.sh
-sudo ./installer.sh
+./installer.sh
 ```
 
 ### Requirements
 
-- Root access
 - Modern Linux distribution (see supported OS list above)
 - Internet connection
+- Administrative privileges (requested when needed)
 
 The script will automatically:
-1. Detect your operating system
-2. Install WireGuard and dependencies
-3. Configure the VPN server
-4. Generate client configuration
-5. Create QR code for easy mobile setup
+1. Detect your operating system and requirements
+2. Ask for configuration preferences (IP, port, DNS provider)
+3. Request admin privileges only when needed for installation
+4. Install WireGuard and dependencies
+5. Configure the VPN server with selected DNS provider
+6. Generate client configuration with QR code
+
+### Client Management
+
+After installation, you can easily manage clients:
+
+```bash
+# Add a new client
+./installer.sh --add-client laptop
+
+# List all clients
+./installer.sh --list-clients
+
+# Show QR code for a client
+./installer.sh --show-qr laptop
+
+# Remove a client
+./installer.sh --remove-client laptop
+
+# Backup configuration
+./installer.sh --backup
+
+# Restore from backup
+./installer.sh --restore /path/to/backup.tar.gz
+```
 
 ### Interactive Mode
 
 ```bash
-sudo ./installer.sh
+./installer.sh
 ```
 
 The script will prompt you for:
 - Server public IP (auto-detected)
 - WireGuard port (default: 51820)
+- DNS provider (Cloudflare, Quad9, Google, OpenDNS, or custom)
 - First client name (default: client1)
 
 ### Non-Interactive Mode
@@ -74,9 +111,10 @@ The script will prompt you for:
 export WG_SERVER_IP="203.0.113.123"
 export WG_PORT="51820"
 export CLIENT_NAME="laptop"
+export DNS_PROVIDER="1.1.1.1, 1.0.0.1"
 export WIREGUARD_TEST_MODE="true"
 
-sudo ./installer.sh
+./installer.sh
 ```
 
 ## Development
@@ -84,14 +122,14 @@ sudo ./installer.sh
 ### Running Tests
 
 ```bash
-# Run all tests
-sudo ./tests/run-tests.sh
+# Run all tests (will request sudo when needed)
+./tests/run-tests.sh
 
 # Run quick tests only
-sudo TEST_MODE=quick ./tests/run-tests.sh
+TEST_MODE=quick ./tests/run-tests.sh
 
 # Run specific test category
-sudo TEST_MODE=installation ./tests/run-tests.sh
+TEST_MODE=installation ./tests/run-tests.sh
 ```
 
 ### Static Analysis
@@ -108,9 +146,9 @@ shfmt -d installer.sh
 # Test on Ubuntu 24.04
 docker run --rm -it --privileged ubuntu:24.04 bash
 # Inside container:
-curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/installer.sh
+curl -O https://raw.githubusercontent.com/HarunRRayhan/wireguard-server/main/installer.sh
 chmod +x installer.sh
-WIREGUARD_TEST_MODE=true ./installer.sh
+WIREGUARD_TEST_MODE=true WG_SERVER_IP="127.0.0.1" ./installer.sh
 ```
 
 ## Supported Operating Systems
@@ -177,15 +215,16 @@ $HOME/
 
 ### Common Issues
 
-1. **Permission denied**: Run with `sudo`
+1. **Permission denied**: The script will request admin privileges when needed
 2. **Unsupported OS**: Check supported OS list above
 3. **Container issues**: Script will automatically use userspace WireGuard
 4. **Network issues**: Check firewall and port availability
+5. **Client IP conflicts**: Use `./installer.sh --list-clients` to see IP allocations
 
 ### Debug Mode
 
 ```bash
-DEBUG=true sudo ./installer.sh
+DEBUG=true ./installer.sh
 ```
 
 ### Container Testing
@@ -193,7 +232,7 @@ DEBUG=true sudo ./installer.sh
 For testing in containers without full privileges:
 
 ```bash
-WIREGUARD_TEST_MODE=true sudo ./installer.sh
+WIREGUARD_TEST_MODE=true WG_SERVER_IP="127.0.0.1" ./installer.sh
 ```
 
 ## Contributing
@@ -201,7 +240,7 @@ WIREGUARD_TEST_MODE=true sudo ./installer.sh
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `sudo ./tests/run-tests.sh`
+4. Run tests: `./tests/run-tests.sh`
 5. Submit a pull request
 
 ### Code Style
@@ -238,6 +277,18 @@ For issues and questions:
 2. Review existing GitHub issues
 3. Create a new issue with detailed information
 
+## What's New in v3.0
+
+🎉 **Major improvements over traditional WireGuard installers:**
+
+- **No more sudo upfront!** - Run as regular user, admin privileges requested only when needed
+- **Post-installation client management** - Add/remove clients without reinstalling
+- **Smart DNS selection** - Choose from Cloudflare, Quad9, Google, OpenDNS, or custom
+- **Configuration backup/restore** - Secure backup and recovery functionality
+- **Improved security** - Better privilege separation and file permissions
+- **Better user experience** - Clear progress indicators and helpful error messages
+- **Command-line interface** - Use flags for automation and scripting
+
 ---
 
-**Note**: This is a modernized version focused on current (2022-2025) operating system releases with enhanced testing and container support.
+**Note**: This is a modernized version focused on current (2022-2025) operating system releases with enhanced security, usability, and client management features.
