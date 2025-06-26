@@ -12,13 +12,18 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Global variables
-SCRIPT_VERSION="2.0.0"
+SCRIPT_VERSION="3.0.0"
 WG_CONFIG_FILE="/etc/wireguard/wg0.conf"
 WG_INTERFACE="wg0"
 WG_PORT=""
 WG_SERVER_IP=""
 USE_USERSPACE=false
 BORINGTUN_INSTALLED=false
+CLIENT_DB_FILE="/etc/wireguard/clients.db"
+TEMP_DIR="/tmp/wireguard-installer-$$"
+DNS_PROVIDER="1.1.1.1, 1.0.0.1"
+SUPPORT_IPV6=false
+CONFIG_BACKUP_DIR="$HOME/.wireguard-backups"
 
 # Logging functions
 log_info() {
@@ -39,11 +44,34 @@ log_debug() {
   fi
 }
 
-# Check if running as root
-check_root() {
-  if [[ $EUID -ne 0 ]]; then
-    log_error "This script must be run as root"
-    exit 1
+# Check if we have root privileges (without requiring it upfront)
+has_root_privileges() {
+  [[ $EUID -eq 0 ]]
+}
+
+# Request root privileges when needed
+request_root_access() {
+  if ! has_root_privileges; then
+    log_info "Administrative privileges required for system configuration."
+    log_info "The script will use sudo for privileged operations."
+    
+    # Test sudo access
+    if ! sudo -n true 2>/dev/null; then
+      log_info "Please enter your password when prompted for sudo access:"
+      sudo -v || {
+        log_error "Failed to obtain administrative privileges"
+        exit 1
+      }
+    fi
+  fi
+}
+
+# Execute command with sudo if not root
+exec_as_root() {
+  if has_root_privileges; then
+    "$@"
+  else
+    sudo "$@"
   fi
 }
 
@@ -349,21 +377,21 @@ install_dependencies() {
 
   case "$PACKAGE_MANAGER" in
     apt)
-      apt-get update
-      apt-get install -y "${deps[@]}"
+      exec_as_root apt-get update
+      exec_as_root apt-get install -y "${deps[@]}"
       ;;
     dnf)
-      dnf install -y "${deps[@]}"
+      exec_as_root dnf install -y "${deps[@]}"
       ;;
     yum)
-      yum install -y "${deps[@]}"
+      exec_as_root yum install -y "${deps[@]}"
       ;;
     apk)
-      apk update
-      apk add "${deps[@]}"
+      exec_as_root apk update
+      exec_as_root apk add "${deps[@]}"
       ;;
     pacman)
-      pacman -Sy --noconfirm "${deps[@]}"
+      exec_as_root pacman -Sy --noconfirm "${deps[@]}"
       ;;
   esac
 }
@@ -401,30 +429,30 @@ install_wireguard() {
 
 # Install WireGuard on Debian/Ubuntu
 install_wireguard_debian() {
-  apt-get update
+  exec_as_root apt-get update
 
   case "$OS_VERSION" in
     22.04 | 24.04 | 24.10 | 25.04)
       # Ubuntu - WireGuard is in main repository
-      apt-get install -y wireguard
+      exec_as_root apt-get install -y wireguard
       ;;
     12 | 13)
       # Debian - WireGuard is in main repository
-      apt-get install -y wireguard
+      exec_as_root apt-get install -y wireguard
       ;;
     *)
       # Legacy versions
-      apt-get install -y wireguard
+      exec_as_root apt-get install -y wireguard
       ;;
   esac
 
   # Install additional tools
-  apt-get install -y qrencode iptables
+  exec_as_root apt-get install -y qrencode iptables
 }
 
 # Install WireGuard on Fedora
 install_wireguard_fedora() {
-  dnf install -y wireguard-tools qrencode iptables
+  exec_as_root dnf install -y wireguard-tools qrencode iptables
 }
 
 # Install WireGuard on RHEL-based distributions
@@ -432,38 +460,38 @@ install_wireguard_rhel() {
   # Enable EPEL repository for additional packages
   case "$OS" in
     almalinux | rocky)
-      dnf install -y epel-release
+      exec_as_root dnf install -y epel-release
       ;;
     ol)
-      dnf install -y oracle-epel-release-el9
+      exec_as_root dnf install -y oracle-epel-release-el9
       ;;
   esac
 
-  dnf install -y wireguard-tools qrencode iptables
+  exec_as_root dnf install -y wireguard-tools qrencode iptables
 }
 
 # Install WireGuard on Alpine
 install_wireguard_alpine() {
-  apk add wireguard-tools qrencode iptables
+  exec_as_root apk add wireguard-tools qrencode iptables
 }
 
 # Install WireGuard on Amazon Linux
 install_wireguard_amazon() {
   case "$OS_VERSION" in
     2023)
-      dnf install -y wireguard-tools qrencode iptables
+      exec_as_root dnf install -y wireguard-tools qrencode iptables
       ;;
     2)
       # Amazon Linux 2 requires EPEL
-      amazon-linux-extras install epel -y
-      yum install -y wireguard-tools qrencode iptables
+      exec_as_root amazon-linux-extras install epel -y
+      exec_as_root yum install -y wireguard-tools qrencode iptables
       ;;
   esac
 }
 
 # Install WireGuard on Arch Linux
 install_wireguard_arch() {
-  pacman -Sy --noconfirm wireguard-tools qrencode iptables
+  exec_as_root pacman -Sy --noconfirm wireguard-tools qrencode iptables
 }
 
 # Install boringtun (userspace WireGuard implementation)
@@ -475,22 +503,22 @@ install_boringtun() {
     log_info "Installing Rust and Cargo..."
     case "$PACKAGE_MANAGER" in
       apt)
-        apt-get install -y cargo
+        exec_as_root apt-get install -y cargo
         ;;
       dnf | yum)
-        $PACKAGE_MANAGER install -y cargo
+        exec_as_root $PACKAGE_MANAGER install -y cargo
         ;;
       apk)
-        apk add cargo
+        exec_as_root apk add cargo
         ;;
       pacman)
-        pacman -S --noconfirm rust cargo
+        exec_as_root pacman -S --noconfirm rust cargo
         ;;
     esac
   fi
 
   # Install boringtun
-  cargo install boringtun --root /usr/local
+  exec_as_root cargo install boringtun --root /usr/local
 
   # Create systemd service for boringtun
   if command -v systemctl >/dev/null 2>&1; then
@@ -502,7 +530,7 @@ install_boringtun() {
 
 # Create systemd service for boringtun
 create_boringtun_service() {
-  cat >/etc/systemd/system/wg-quick@.service <<'EOF'
+  exec_as_root tee /etc/systemd/system/wg-quick@.service >/dev/null <<'EOF'
 [Unit]
 Description=WireGuard via wg-quick(8) for %I (boringtun)
 After=network-online.target nss-lookup.target
@@ -528,7 +556,7 @@ Environment=WG_SUDO=1
 WantedBy=multi-user.target
 EOF
 
-  systemctl daemon-reload
+  exec_as_root systemctl daemon-reload
 }
 
 # Get server public IP
@@ -561,6 +589,74 @@ get_server_ip() {
 
   log_warn "Could not automatically detect server IP"
   return 1
+}
+
+# DNS provider selection
+select_dns_provider() {
+  if [[ -n "$DNS_PROVIDER" ]]; then
+    return 0
+  fi
+
+  echo
+  echo "Select DNS provider for VPN clients:"
+  echo "1) Cloudflare (1.1.1.1, 1.0.0.1) - Privacy focused"
+  echo "2) Quad9 (9.9.9.9, 149.112.112.112) - Security focused"
+  echo "3) Google (8.8.8.8, 8.8.4.4) - Reliable"
+  echo "4) OpenDNS (208.67.222.222, 208.67.220.220) - Family safe"
+  echo "5) Custom DNS servers"
+  echo
+
+  while true; do
+    read -r -p "Choose DNS provider [1]: " dns_choice
+    dns_choice="${dns_choice:-1}"
+
+    case "$dns_choice" in
+      1)
+        DNS_PROVIDER="1.1.1.1, 1.0.0.1"
+        log_info "Selected Cloudflare DNS"
+        break
+        ;;
+      2)
+        DNS_PROVIDER="9.9.9.9, 149.112.112.112"
+        log_info "Selected Quad9 DNS"
+        break
+        ;;
+      3)
+        DNS_PROVIDER="8.8.8.8, 8.8.4.4"
+        log_info "Selected Google DNS"
+        break
+        ;;
+      4)
+        DNS_PROVIDER="208.67.222.222, 208.67.220.220"
+        log_info "Selected OpenDNS"
+        break
+        ;;
+      5)
+        read -r -p "Enter custom DNS servers (comma separated): " custom_dns
+        if [[ -n "$custom_dns" ]]; then
+          DNS_PROVIDER="$custom_dns"
+          log_info "Selected custom DNS: $DNS_PROVIDER"
+          break
+        else
+          log_error "Invalid DNS servers"
+        fi
+        ;;
+      *)
+        log_error "Invalid choice. Please select 1-5."
+        ;;
+    esac
+  done
+}
+
+# Check for IPv6 support
+check_ipv6_support() {
+  if [[ -f /proc/net/if_inet6 ]] && ip -6 addr show | grep -q "inet6.*global"; then
+    SUPPORT_IPV6=true
+    log_debug "IPv6 support detected"
+  else
+    SUPPORT_IPV6=false
+    log_debug "IPv6 not supported or not configured"
+  fi
 }
 
 # Interactive configuration
@@ -604,6 +700,170 @@ configure_wireguard() {
     log_error "Invalid client name. Use only letters, numbers, hyphens, and underscores."
     exit 1
   fi
+
+  # Select DNS provider
+  select_dns_provider
+
+  # Check IPv6 support
+  check_ipv6_support
+}
+
+# Client database management
+init_client_db() {
+  local db_dir
+  db_dir=$(dirname "$CLIENT_DB_FILE")
+  exec_as_root mkdir -p "$db_dir"
+  exec_as_root touch "$CLIENT_DB_FILE"
+  exec_as_root chmod 600 "$CLIENT_DB_FILE"
+}
+
+# Add client to database
+add_client_to_db() {
+  local client_name="$1"
+  local client_ip="$2"
+  local client_public_key="$3"
+  
+  if ! grep -q "^$client_name:" "$CLIENT_DB_FILE" 2>/dev/null; then
+    echo "$client_name:$client_ip:$client_public_key:$(date +%s)" | exec_as_root tee -a "$CLIENT_DB_FILE" >/dev/null
+  fi
+}
+
+# Remove client from database
+remove_client_from_db() {
+  local client_name="$1"
+  exec_as_root sed -i "/^$client_name:/d" "$CLIENT_DB_FILE"
+}
+
+# Get next available IP
+get_next_client_ip() {
+  local base_ip="10.66.66"
+  local start_ip=2
+  local max_ip=254
+  
+  for ((i=start_ip; i<=max_ip; i++)); do
+    local test_ip="$base_ip.$i"
+    if ! grep -q ":$test_ip:" "$CLIENT_DB_FILE" 2>/dev/null; then
+      echo "$test_ip"
+      return 0
+    fi
+  done
+  
+  log_error "No available IP addresses in range $base_ip.2-254"
+  exit 1
+}
+
+# List all clients
+list_clients() {
+  if [[ ! -f "$CLIENT_DB_FILE" ]]; then
+    log_info "No clients found"
+    return 0
+  fi
+  
+  echo "Current WireGuard clients:"
+  echo "=========================="
+  echo "Name                IP Address      Added"
+  echo "------------------------------------------------"
+  
+  while IFS=: read -r name ip key timestamp; do
+    local date_added
+    date_added=$(date -d "@$timestamp" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown")
+    printf "%-18s %-15s %s\n" "$name" "$ip" "$date_added"
+  done < "$CLIENT_DB_FILE"
+}
+
+# Add new client
+add_client() {
+  local client_name="$1"
+  
+  if [[ -z "$client_name" ]]; then
+    log_error "Client name is required"
+    return 1
+  fi
+  
+  # Validate client name
+  if [[ ! "$client_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    log_error "Invalid client name. Use only letters, numbers, hyphens, and underscores."
+    return 1
+  fi
+  
+  # Check if client already exists
+  if grep -q "^$client_name:" "$CLIENT_DB_FILE" 2>/dev/null; then
+    log_error "Client '$client_name' already exists"
+    return 1
+  fi
+  
+  # Request root access for system operations
+  request_root_access
+  
+  # Initialize client database
+  init_client_db
+  
+  # Get next available IP
+  local client_ip
+  client_ip=$(get_next_client_ip)
+  
+  log_info "Adding client '$client_name' with IP $client_ip"
+  
+  # Generate client keys
+  local client_private_key client_public_key
+  client_private_key=$(wg genkey)
+  client_public_key=$(echo "$client_private_key" | wg pubkey)
+  
+  # Add client to WireGuard config
+  exec_as_root tee -a "$WG_CONFIG_FILE" >/dev/null << EOF
+
+# Client: $client_name
+[Peer]
+PublicKey = $client_public_key
+AllowedIPs = $client_ip/32
+EOF
+  
+  # Add client to database
+  add_client_to_db "$client_name" "$client_ip" "$client_public_key"
+  
+  # Create client config file
+  create_client_config_file "$client_name" "$client_private_key" "$client_ip"
+  
+  # Reload WireGuard
+  exec_as_root systemctl reload wg-quick@wg0 2>/dev/null || true
+  
+  log_info "Client '$client_name' added successfully"
+  log_info "Configuration file: $HOME/$client_name.conf"
+}
+
+# Remove client
+remove_client() {
+  local client_name="$1"
+  
+  if [[ -z "$client_name" ]]; then
+    log_error "Client name is required"
+    return 1
+  fi
+  
+  # Check if client exists
+  if ! grep -q "^$client_name:" "$CLIENT_DB_FILE" 2>/dev/null; then
+    log_error "Client '$client_name' not found"
+    return 1
+  fi
+  
+  # Request root access for system operations
+  request_root_access
+  
+  log_info "Removing client '$client_name'"
+  
+  # Remove from WireGuard config
+  exec_as_root sed -i "/^# Client: $client_name$/,/^$/d" "$WG_CONFIG_FILE"
+  
+  # Remove from database
+  remove_client_from_db "$client_name"
+  
+  # Remove client config file
+  rm -f "$HOME/$client_name.conf" "$HOME/$client_name.png"
+  
+  # Reload WireGuard
+  exec_as_root systemctl reload wg-quick@wg0 2>/dev/null || true
+  
+  log_info "Client '$client_name' removed successfully"
 }
 
 # Generate WireGuard keys
@@ -611,18 +871,55 @@ generate_keys() {
   log_info "Generating WireGuard keys..."
 
   # Create WireGuard directory
-  mkdir -p /etc/wireguard
-  chmod 700 /etc/wireguard
+  exec_as_root mkdir -p /etc/wireguard
+  exec_as_root chmod 700 /etc/wireguard
 
   # Generate server keys
-  wg genkey | tee /etc/wireguard/server_private.key | wg pubkey >/etc/wireguard/server_public.key
-  chmod 600 /etc/wireguard/server_private.key
-  chmod 644 /etc/wireguard/server_public.key
+  wg genkey | exec_as_root tee /etc/wireguard/server_private.key | wg pubkey | exec_as_root tee /etc/wireguard/server_public.key >/dev/null
+  exec_as_root chmod 600 /etc/wireguard/server_private.key
+  exec_as_root chmod 644 /etc/wireguard/server_public.key
 
-  # Generate client keys
-  wg genkey | tee /etc/wireguard/client_private.key | wg pubkey >/etc/wireguard/client_public.key
-  chmod 600 /etc/wireguard/client_private.key
-  chmod 644 /etc/wireguard/client_public.key
+  # Generate client keys for initial client
+  wg genkey | exec_as_root tee /etc/wireguard/client_private.key | wg pubkey | exec_as_root tee /etc/wireguard/client_public.key >/dev/null
+  exec_as_root chmod 600 /etc/wireguard/client_private.key
+  exec_as_root chmod 644 /etc/wireguard/client_public.key
+
+  # Initialize client database
+  init_client_db
+}
+
+# Create client configuration file
+create_client_config_file() {
+  local client_name="$1"
+  local client_private_key="$2"
+  local client_ip="$3"
+  
+  local server_public_key
+  server_public_key=$(exec_as_root cat /etc/wireguard/server_public.key)
+  
+  local config_file="$HOME/$client_name.conf"
+  
+  cat >"$config_file" <<EOF
+[Interface]
+PrivateKey = $client_private_key
+Address = $client_ip/32
+DNS = $DNS_PROVIDER
+
+[Peer]
+PublicKey = $server_public_key
+AllowedIPs = 0.0.0.0/0
+Endpoint = $WG_SERVER_IP:$WG_PORT
+PersistentKeepalive = 25
+EOF
+
+  chmod 600 "$config_file"
+  log_info "Client configuration created: $config_file"
+  
+  # Generate QR code if qrencode is available
+  if command -v qrencode >/dev/null 2>&1; then
+    qrencode -t png -o "$HOME/$client_name.png" < "$config_file"
+    log_info "QR code generated: $HOME/$client_name.png"
+  fi
 }
 
 # Create server configuration
@@ -631,10 +928,10 @@ create_server_config() {
 
   local server_private_key
   local client_public_key
-  server_private_key=$(cat /etc/wireguard/server_private.key)
-  client_public_key=$(cat /etc/wireguard/client_public.key)
+  server_private_key=$(exec_as_root cat /etc/wireguard/server_private.key)
+  client_public_key=$(exec_as_root cat /etc/wireguard/client_public.key)
 
-  cat >"$WG_CONFIG_FILE" <<EOF
+  exec_as_root tee "$WG_CONFIG_FILE" >/dev/null <<EOF
 [Interface]
 Address = 10.66.66.1/24
 ListenPort = $WG_PORT
@@ -642,12 +939,16 @@ PrivateKey = $server_private_key
 PostUp = iptables -A FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -A FORWARD -o $WG_INTERFACE -j ACCEPT; iptables -t nat -A POSTROUTING -o \$(ip route | awk '/default/ { print \$5 }') -j MASQUERADE
 PostDown = iptables -D FORWARD -i $WG_INTERFACE -j ACCEPT; iptables -D FORWARD -o $WG_INTERFACE -j ACCEPT; iptables -t nat -D POSTROUTING -o \$(ip route | awk '/default/ { print \$5 }') -j MASQUERADE
 
+# Client: $CLIENT_NAME
 [Peer]
 PublicKey = $client_public_key
 AllowedIPs = 10.66.66.2/32
 EOF
 
-  chmod 600 "$WG_CONFIG_FILE"
+  exec_as_root chmod 600 "$WG_CONFIG_FILE"
+  
+  # Add initial client to database
+  add_client_to_db "$CLIENT_NAME" "10.66.66.2" "$client_public_key"
 }
 
 # Create client configuration
@@ -691,8 +992,8 @@ configure_networking() {
   log_info "Configuring networking..."
 
   # Enable IP forwarding
-  echo 'net.ipv4.ip_forward = 1' >/etc/sysctl.d/99-wireguard.conf
-  sysctl -p /etc/sysctl.d/99-wireguard.conf
+  echo 'net.ipv4.ip_forward = 1' | exec_as_root tee /etc/sysctl.d/99-wireguard.conf >/dev/null
+  exec_as_root sysctl -p /etc/sysctl.d/99-wireguard.conf
 
   # Configure firewall (basic iptables rules are in the WireGuard config)
   # Additional firewall configuration could go here
@@ -703,10 +1004,10 @@ start_wireguard() {
   log_info "Starting WireGuard service..."
 
   if command -v systemctl >/dev/null 2>&1; then
-    systemctl enable wg-quick@$WG_INTERFACE
-    systemctl start wg-quick@$WG_INTERFACE
+    exec_as_root systemctl enable wg-quick@$WG_INTERFACE
+    exec_as_root systemctl start wg-quick@$WG_INTERFACE
 
-    if systemctl is-active --quiet wg-quick@$WG_INTERFACE; then
+    if exec_as_root systemctl is-active --quiet wg-quick@$WG_INTERFACE; then
       log_info "WireGuard service started successfully"
     else
       log_warn "WireGuard service may not have started properly (this can be normal in containers)"
@@ -740,35 +1041,209 @@ print_summary() {
   echo "====================================="
 }
 
+# Show usage information
+show_usage() {
+  cat << EOF
+WireGuard VPN Installer v$SCRIPT_VERSION
+
+USAGE:
+  $0 [OPTIONS]
+
+OPTIONS:
+  --install               Install WireGuard VPN server (default)
+  --add-client <name>     Add a new client
+  --remove-client <name>  Remove an existing client
+  --list-clients          List all clients
+  --show-qr <name>        Show QR code for client
+  --backup                Backup WireGuard configuration
+  --restore <file>        Restore configuration from backup
+  --help                  Show this help message
+
+EXAMPLES:
+  $0                      # Interactive installation
+  $0 --add-client laptop  # Add client named 'laptop'
+  $0 --list-clients       # List all clients
+  $0 --show-qr laptop     # Show QR code for 'laptop' client
+
+ENVIRONMENT VARIABLES:
+  WG_SERVER_IP           Server public IP address
+  WG_PORT               WireGuard port (default: 51820)
+  CLIENT_NAME           First client name (default: client1)
+  DNS_PROVIDER          DNS servers for clients
+  WIREGUARD_TEST_MODE   Enable test mode
+  DEBUG                 Enable debug logging
+
+EOF
+}
+
+# Show QR code for existing client
+show_qr() {
+  local client_name="$1"
+  local config_file="$HOME/$client_name.conf"
+  
+  if [[ ! -f "$config_file" ]]; then
+    log_error "Client configuration file not found: $config_file"
+    return 1
+  fi
+  
+  if command -v qrencode >/dev/null 2>&1; then
+    echo "QR Code for client '$client_name':"
+    qrencode -t ansiutf8 < "$config_file"
+  else
+    log_error "qrencode not installed. Install it with: apt install qrencode"
+    return 1
+  fi
+}
+
+# Backup WireGuard configuration
+backup_config() {
+  local backup_dir="$CONFIG_BACKUP_DIR"
+  local timestamp=$(date +%Y%m%d_%H%M%S)
+  local backup_file="$backup_dir/wireguard_backup_$timestamp.tar.gz"
+  
+  log_info "Creating backup..."
+  
+  mkdir -p "$backup_dir"
+  
+  # Create backup
+  exec_as_root tar -czf "$backup_file" -C /etc wireguard/ || {
+    log_error "Failed to create backup"
+    return 1
+  }
+  
+  # Copy client database if it exists
+  if [[ -f "$CLIENT_DB_FILE" ]]; then
+    exec_as_root cp "$CLIENT_DB_FILE" "$backup_dir/clients_$timestamp.db"
+  fi
+  
+  log_info "Backup created: $backup_file"
+}
+
+# Restore WireGuard configuration
+restore_config() {
+  local backup_file="$1"
+  
+  if [[ ! -f "$backup_file" ]]; then
+    log_error "Backup file not found: $backup_file"
+    return 1
+  fi
+  
+  log_warn "This will overwrite current WireGuard configuration!"
+  read -r -p "Continue? [y/N]: " confirm
+  
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    log_info "Restore cancelled"
+    return 0
+  fi
+  
+  # Request root access
+  request_root_access
+  
+  log_info "Restoring from backup..."
+  
+  # Stop WireGuard service
+  exec_as_root systemctl stop wg-quick@wg0 2>/dev/null || true
+  
+  # Restore files
+  exec_as_root tar -xzf "$backup_file" -C /etc || {
+    log_error "Failed to restore backup"
+    return 1
+  }
+  
+  # Start WireGuard service
+  exec_as_root systemctl start wg-quick@wg0 2>/dev/null || true
+  
+  log_info "Configuration restored successfully"
+}
+
 # Main installation function
-main() {
+install_wireguard_server() {
   echo "WireGuard VPN Installer v$SCRIPT_VERSION"
   echo "Modern version with 2022-2025 OS support"
   echo
 
-  # Pre-flight checks
-  check_root
+  # Phase 1: Non-root operations
+  log_info "Phase 1: System analysis and configuration"
   detect_os
   check_virtualization
   check_requirements
-
-  # Install WireGuard
-  install_wireguard
-
-  # Configure WireGuard
   configure_wireguard
+
+  # Phase 2: Request root access and install
+  log_info "Phase 2: System installation (requires administrative privileges)"
+  request_root_access
+  
+  install_wireguard
   generate_keys
   create_server_config
-  create_client_config
+  
+  # Create initial client configuration
+  local client_private_key
+  client_private_key=$(exec_as_root cat /etc/wireguard/client_private.key)
+  create_client_config_file "$CLIENT_NAME" "$client_private_key" "10.66.66.2"
+  
   configure_networking
-
-  # Start service
   start_wireguard
-
-  # Show summary
   print_summary
 
   log_info "Installation completed successfully!"
+}
+
+# Main function with argument parsing
+main() {
+  case "${1:-}" in
+    --help|-h)
+      show_usage
+      exit 0
+      ;;
+    --add-client)
+      if [[ -z "${2:-}" ]]; then
+        log_error "Client name required"
+        show_usage
+        exit 1
+      fi
+      add_client "$2"
+      ;;
+    --remove-client)
+      if [[ -z "${2:-}" ]]; then
+        log_error "Client name required"
+        show_usage
+        exit 1
+      fi
+      remove_client "$2"
+      ;;
+    --list-clients)
+      list_clients
+      ;;
+    --show-qr)
+      if [[ -z "${2:-}" ]]; then
+        log_error "Client name required"
+        show_usage
+        exit 1
+      fi
+      show_qr "$2"
+      ;;
+    --backup)
+      backup_config
+      ;;
+    --restore)
+      if [[ -z "${2:-}" ]]; then
+        log_error "Backup file required"
+        show_usage
+        exit 1
+      fi
+      restore_config "$2"
+      ;;
+    --install|"")
+      # Default action: install WireGuard server
+      install_wireguard_server
+      ;;
+    *)
+      log_error "Unknown option: $1"
+      show_usage
+      exit 1
+      ;;
+  esac
 }
 
 # Handle script arguments and environment variables
