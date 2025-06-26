@@ -38,7 +38,7 @@ A modernized, robust WireGuard VPN installation script with comprehensive suppor
 
 ```bash
 # Download and run the script
-curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/installer.sh
+curl -O https://raw.githubusercontent.com/HarunRRayhan/wireguard-server/main/installer.sh
 chmod +x installer.sh
 sudo ./installer.sh
 ```
@@ -108,7 +108,7 @@ shfmt -d installer.sh
 # Test on Ubuntu 24.04
 docker run --rm -it --privileged ubuntu:24.04 bash
 # Inside container:
-curl -O https://raw.githubusercontent.com/your-repo/wireguard-install/main/installer.sh
+curl -O https://raw.githubusercontent.com/HarunRRayhan/wireguard-server/main/installer.sh
 chmod +x installer.sh
 WIREGUARD_TEST_MODE=true ./installer.sh
 ```

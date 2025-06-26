@@ -2,7 +2,7 @@
 
 # WireGuard VPN installer for Linux servers
 # Modernized version with support for 2022-2025 OS releases
-# https://github.com/angristan/wireguard-install
+# https://github.com/HarunRRayhan/wireguard-server
 
 # Colors for output
 RED='\033[0;31m'
