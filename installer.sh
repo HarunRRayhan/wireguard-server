@@ -52,7 +52,7 @@ request_root_access() {
   if ! has_root_privileges; then
     log_info "Administrative privileges required for system configuration."
     log_info "The script will use sudo for privileged operations."
-    
+
     # Test sudo access
     if ! sudo -n true 2>/dev/null; then
       log_info "Please enter your password when prompted for sudo access:"
@@ -718,7 +718,7 @@ add_client_to_db() {
   local client_name="$1"
   local client_ip="$2"
   local client_public_key="$3"
-  
+
   if ! grep -q "^$client_name:" "$CLIENT_DB_FILE" 2>/dev/null; then
     echo "$client_name:$client_ip:$client_public_key:$(date +%s)" | exec_as_root tee -a "$CLIENT_DB_FILE" >/dev/null
   fi
@@ -735,15 +735,15 @@ get_next_client_ip() {
   local base_ip="10.66.66"
   local start_ip=2
   local max_ip=254
-  
-  for ((i=start_ip; i<=max_ip; i++)); do
+
+  for ((i = start_ip; i <= max_ip; i++)); do
     local test_ip="$base_ip.$i"
     if ! grep -q ":$test_ip:" "$CLIENT_DB_FILE" 2>/dev/null; then
       echo "$test_ip"
       return 0
     fi
   done
-  
+
   log_error "No available IP addresses in range $base_ip.2-254"
   exit 1
 }
@@ -754,75 +754,75 @@ list_clients() {
     log_info "No clients found"
     return 0
   fi
-  
+
   echo "Current WireGuard clients:"
   echo "=========================="
   echo "Name                IP Address      Added"
   echo "------------------------------------------------"
-  
+
   while IFS=: read -r name ip _ timestamp; do
     local date_added
     date_added=$(date -d "@$timestamp" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown")
     printf "%-18s %-15s %s\n" "$name" "$ip" "$date_added"
-  done < "$CLIENT_DB_FILE"
+  done <"$CLIENT_DB_FILE"
 }
 
 # Add new client
 add_client() {
   local client_name="$1"
-  
+
   if [[ -z "$client_name" ]]; then
     log_error "Client name is required"
     return 1
   fi
-  
+
   # Validate client name
   if [[ ! "$client_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     log_error "Invalid client name. Use only letters, numbers, hyphens, and underscores."
     return 1
   fi
-  
+
   # Check if client already exists
   if grep -q "^$client_name:" "$CLIENT_DB_FILE" 2>/dev/null; then
     log_error "Client '$client_name' already exists"
     return 1
   fi
-  
+
   # Request root access for system operations
   request_root_access
-  
+
   # Initialize client database
   init_client_db
-  
+
   # Get next available IP
   local client_ip
   client_ip=$(get_next_client_ip)
-  
+
   log_info "Adding client '$client_name' with IP $client_ip"
-  
+
   # Generate client keys
   local client_private_key client_public_key
   client_private_key=$(wg genkey)
   client_public_key=$(echo "$client_private_key" | wg pubkey)
-  
+
   # Add client to WireGuard config
-  exec_as_root tee -a "$WG_CONFIG_FILE" >/dev/null << EOF
+  exec_as_root tee -a "$WG_CONFIG_FILE" >/dev/null <<EOF
 
 # Client: $client_name
 [Peer]
 PublicKey = $client_public_key
 AllowedIPs = $client_ip/32
 EOF
-  
+
   # Add client to database
   add_client_to_db "$client_name" "$client_ip" "$client_public_key"
-  
+
   # Create client config file
   create_client_config_file "$client_name" "$client_private_key" "$client_ip"
-  
+
   # Reload WireGuard
   exec_as_root systemctl reload wg-quick@wg0 2>/dev/null || true
-  
+
   log_info "Client '$client_name' added successfully"
   log_info "Configuration file: $HOME/$client_name.conf"
 }
@@ -830,35 +830,35 @@ EOF
 # Remove client
 remove_client() {
   local client_name="$1"
-  
+
   if [[ -z "$client_name" ]]; then
     log_error "Client name is required"
     return 1
   fi
-  
+
   # Check if client exists
   if ! grep -q "^$client_name:" "$CLIENT_DB_FILE" 2>/dev/null; then
     log_error "Client '$client_name' not found"
     return 1
   fi
-  
+
   # Request root access for system operations
   request_root_access
-  
+
   log_info "Removing client '$client_name'"
-  
+
   # Remove from WireGuard config
   exec_as_root sed -i "/^# Client: $client_name$/,/^$/d" "$WG_CONFIG_FILE"
-  
+
   # Remove from database
   remove_client_from_db "$client_name"
-  
+
   # Remove client config file
   rm -f "$HOME/$client_name.conf" "$HOME/$client_name.png"
-  
+
   # Reload WireGuard
   exec_as_root systemctl reload wg-quick@wg0 2>/dev/null || true
-  
+
   log_info "Client '$client_name' removed successfully"
 }
 
@@ -889,12 +889,12 @@ create_client_config_file() {
   local client_name="$1"
   local client_private_key="$2"
   local client_ip="$3"
-  
+
   local server_public_key
   server_public_key=$(exec_as_root cat /etc/wireguard/server_public.key)
-  
+
   local config_file="$HOME/$client_name.conf"
-  
+
   cat >"$config_file" <<EOF
 [Interface]
 PrivateKey = $client_private_key
@@ -910,10 +910,10 @@ EOF
 
   chmod 600 "$config_file"
   log_info "Client configuration created: $config_file"
-  
+
   # Generate QR code if qrencode is available
   if command -v qrencode >/dev/null 2>&1; then
-    qrencode -t png -o "$HOME/$client_name.png" < "$config_file"
+    qrencode -t png -o "$HOME/$client_name.png" <"$config_file"
     log_info "QR code generated: $HOME/$client_name.png"
   fi
 }
@@ -942,7 +942,7 @@ AllowedIPs = 10.66.66.2/32
 EOF
 
   exec_as_root chmod 600 "$WG_CONFIG_FILE"
-  
+
   # Add initial client to database
   add_client_to_db "$CLIENT_NAME" "10.66.66.2" "$client_public_key"
 }
@@ -1039,7 +1039,7 @@ print_summary() {
 
 # Show usage information
 show_usage() {
-  cat << EOF
+  cat <<EOF
 WireGuard VPN Installer v$SCRIPT_VERSION
 
 USAGE:
@@ -1076,15 +1076,15 @@ EOF
 show_qr() {
   local client_name="$1"
   local config_file="$HOME/$client_name.conf"
-  
+
   if [[ ! -f "$config_file" ]]; then
     log_error "Client configuration file not found: $config_file"
     return 1
   fi
-  
+
   if command -v qrencode >/dev/null 2>&1; then
     echo "QR Code for client '$client_name':"
-    qrencode -t ansiutf8 < "$config_file"
+    qrencode -t ansiutf8 <"$config_file"
   else
     log_error "qrencode not installed. Install it with: apt install qrencode"
     return 1
@@ -1097,59 +1097,59 @@ backup_config() {
   local timestamp
   timestamp=$(date +%Y%m%d_%H%M%S)
   local backup_file="$backup_dir/wireguard_backup_$timestamp.tar.gz"
-  
+
   log_info "Creating backup..."
-  
+
   mkdir -p "$backup_dir"
-  
+
   # Create backup
   exec_as_root tar -czf "$backup_file" -C /etc wireguard/ || {
     log_error "Failed to create backup"
     return 1
   }
-  
+
   # Copy client database if it exists
   if [[ -f "$CLIENT_DB_FILE" ]]; then
     exec_as_root cp "$CLIENT_DB_FILE" "$backup_dir/clients_$timestamp.db"
   fi
-  
+
   log_info "Backup created: $backup_file"
 }
 
 # Restore WireGuard configuration
 restore_config() {
   local backup_file="$1"
-  
+
   if [[ ! -f "$backup_file" ]]; then
     log_error "Backup file not found: $backup_file"
     return 1
   fi
-  
+
   log_warn "This will overwrite current WireGuard configuration!"
   read -r -p "Continue? [y/N]: " confirm
-  
+
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     log_info "Restore cancelled"
     return 0
   fi
-  
+
   # Request root access
   request_root_access
-  
+
   log_info "Restoring from backup..."
-  
+
   # Stop WireGuard service
   exec_as_root systemctl stop wg-quick@wg0 2>/dev/null || true
-  
+
   # Restore files
   exec_as_root tar -xzf "$backup_file" -C /etc || {
     log_error "Failed to restore backup"
     return 1
   }
-  
+
   # Start WireGuard service
   exec_as_root systemctl start wg-quick@wg0 2>/dev/null || true
-  
+
   log_info "Configuration restored successfully"
 }
 
@@ -1169,16 +1169,16 @@ install_wireguard_server() {
   # Phase 2: Request root access and install
   log_info "Phase 2: System installation (requires administrative privileges)"
   request_root_access
-  
+
   install_wireguard
   generate_keys
   create_server_config
-  
+
   # Create initial client configuration
   local client_private_key
   client_private_key=$(exec_as_root cat /etc/wireguard/client_private.key)
   create_client_config_file "$CLIENT_NAME" "$client_private_key" "10.66.66.2"
-  
+
   configure_networking
   start_wireguard
   print_summary
@@ -1189,7 +1189,7 @@ install_wireguard_server() {
 # Main function with argument parsing
 main() {
   case "${1:-}" in
-    --help|-h)
+    --help | -h)
       show_usage
       exit 0
       ;;
@@ -1231,7 +1231,7 @@ main() {
       fi
       restore_config "$2"
       ;;
-    --install|"")
+    --install | "")
       # Default action: install WireGuard server
       install_wireguard_server
       ;;
