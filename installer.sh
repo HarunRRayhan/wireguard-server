@@ -20,9 +20,7 @@ WG_SERVER_IP=""
 USE_USERSPACE=false
 BORINGTUN_INSTALLED=false
 CLIENT_DB_FILE="/etc/wireguard/clients.db"
-TEMP_DIR="/tmp/wireguard-installer-$$"
 DNS_PROVIDER="1.1.1.1, 1.0.0.1"
-SUPPORT_IPV6=false
 CONFIG_BACKUP_DIR="$HOME/.wireguard-backups"
 
 # Logging functions
@@ -651,10 +649,8 @@ select_dns_provider() {
 # Check for IPv6 support
 check_ipv6_support() {
   if [[ -f /proc/net/if_inet6 ]] && ip -6 addr show | grep -q "inet6.*global"; then
-    SUPPORT_IPV6=true
     log_debug "IPv6 support detected"
   else
-    SUPPORT_IPV6=false
     log_debug "IPv6 not supported or not configured"
   fi
 }
@@ -764,7 +760,7 @@ list_clients() {
   echo "Name                IP Address      Added"
   echo "------------------------------------------------"
   
-  while IFS=: read -r name ip key timestamp; do
+  while IFS=: read -r name ip _ timestamp; do
     local date_added
     date_added=$(date -d "@$timestamp" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "Unknown")
     printf "%-18s %-15s %s\n" "$name" "$ip" "$date_added"
@@ -1098,7 +1094,8 @@ show_qr() {
 # Backup WireGuard configuration
 backup_config() {
   local backup_dir="$CONFIG_BACKUP_DIR"
-  local timestamp=$(date +%Y%m%d_%H%M%S)
+  local timestamp
+  timestamp=$(date +%Y%m%d_%H%M%S)
   local backup_file="$backup_dir/wireguard_backup_$timestamp.tar.gz"
   
   log_info "Creating backup..."
